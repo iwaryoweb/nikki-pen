@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>nikki-pen</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="日記">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+  :root {
+    --bg: #14161b;
+    --panel: #1c1f26;
+    --line: #2a2e37;
+    --ink: #e8e4da;
+    --ink-dim: #8b8778;
+    --gold: #d4af6a;
+    --gold-deep: #b8934e;
+    --danger: #c4695e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, "Hiragino Sans", "Noto Sans CJK JP", sans-serif;
+    padding: max(env(safe-area-inset-top), 20px) 20px calc(env(safe-area-inset-bottom) + 20px);
+    max-width: 480px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  header { display: flex; align-items: center; justify-content: space-between; }
+  .day-toggle { display: flex; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+  .day-toggle button {
+    border: 0; background: transparent; color: var(--ink-dim);
+    font-size: 14px; padding: 8px 18px; font-family: inherit;
+  }
+  .day-toggle button.on { background: var(--gold); color: #14161b; font-weight: 600; border-radius: 999px; }
+  #dateLabel { font-size: 13px; color: var(--ink-dim); letter-spacing: 0.06em; font-variant-numeric: tabular-nums; }
+  #gear { border: 0; background: transparent; color: var(--ink-dim); font-size: 20px; padding: 6px; }
+  label { display: block; font-size: 12px; letter-spacing: 0.12em; color: var(--ink-dim); margin-bottom: 8px; }
+  .field { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; }
+  .field:focus-within { border-color: var(--gold-deep); }
+  input, textarea {
+    width: 100%; border: 0; background: transparent; color: var(--ink);
+    font-size: 17px; font-family: inherit; outline: none; resize: none; line-height: 1.6;
+  }
+  textarea#hitokoto { min-height: 3.2em; }
+  textarea#memo { min-height: 2em; font-size: 15px; }
+  ::placeholder { color: #4d5160; }
+  #save {
+    border: 0; border-radius: 999px; background: var(--gold); color: #14161b;
+    font-size: 17px; font-weight: 700; font-family: inherit; padding: 16px;
+    letter-spacing: 0.08em;
+  }
+  #save:active { background: var(--gold-deep); }
+  #save:disabled { opacity: 0.5; }
+  #toast {
+    position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 84px);
+    transform: translateX(-50%) translateY(20px);
+    background: var(--panel); border: 1px solid var(--line); color: var(--ink);
+    border-radius: 999px; padding: 10px 22px; font-size: 14px;
+    opacity: 0; transition: opacity 0.25s, transform 0.25s; pointer-events: none;
+    white-space: nowrap;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.err { border-color: var(--danger); color: var(--danger); }
+  dialog {
+    border: 1px solid var(--line); border-radius: 20px; background: var(--panel); color: var(--ink);
+    width: min(90vw, 400px); padding: 24px; margin: auto;
+  }
+  dialog::backdrop { background: rgba(0,0,0,0.6); }
+  dialog h2 { font-size: 15px; margin-bottom: 14px; letter-spacing: 0.08em; }
+  dialog p { font-size: 12px; color: var(--ink-dim); line-height: 1.7; margin-top: 10px; }
+  dialog input { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+  dialog .row { display: flex; gap: 10px; margin-top: 16px; }
+  dialog button {
+    flex: 1; border: 0; border-radius: 999px; padding: 12px; font-size: 15px; font-family: inherit;
+  }
+  #patSave { background: var(--gold); color: #14161b; font-weight: 600; }
+  #patCancel { background: var(--line); color: var(--ink); }
+  #queueNote { font-size: 12px; color: var(--ink-dim); text-align: center; }
+</style>
+</head>
+<body>
+  <header>
+    <div class="day-toggle" role="group" aria-label="日付">
+      <button id="btnToday" class="on">今日</button>
+      <button id="btnYesterday">昨日</button>
+    </div>
+    <span id="dateLabel"></span>
+    <button id="gear" aria-label="設定">&#9881;</button>
+  </header>
+
+  <div class="field">
+    <label for="kane">金（現金のみ・なければ空欄）</label>
+    <input id="kane" type="text" placeholder="なし" autocomplete="off">
+  </div>
+
+  <div class="field">
+    <label for="hitokoto">一行</label>
+    <textarea id="hitokoto" placeholder="今日あったこと・思ったこと"></textarea>
+  </div>
+
+  <div class="field">
+    <label for="memo">メモ（任意）</label>
+    <textarea id="memo" placeholder=""></textarea>
+  </div>
+
+  <button id="save">記す</button>
+  <div id="queueNote" hidden></div>
+
+  <div id="toast" role="status"></div>
+
+  <dialog id="settings">
+    <h2>設定 — GitHub PAT</h2>
+    <input id="patInput" type="password" placeholder="github_pat_..." autocomplete="off">
+    <p>nikki リポジトリ限定・Contents 読み書きのみの Fine-grained PAT を貼る。この端末の localStorage にだけ保存される。</p>
+    <div class="row">
+      <button id="patCancel">閉じる</button>
+      <button id="patSave">保存</button>
+    </div>
+  </dialog>
+
+<script>
+const OWNER = 'iwaryoweb';
+const REPO = 'nikki';
+
+const $ = id => document.getElementById(id);
+let dayOffset = 0; // 0=今日, -1=昨日
+
+function pad(n) { return String(n).padStart(2, '0'); }
+function dateStr(offset) {
+  const d = new Date(Date.now() + offset * 86400000);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+function timeStr() {
+  const d = new Date();
+  return `${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+}
+function renderDate() {
+  $('dateLabel').textContent = dateStr(dayOffset);
+  $('btnToday').classList.toggle('on', dayOffset === 0);
+  $('btnYesterday').classList.toggle('on', dayOffset === -1);
+}
+$('btnToday').onclick = () => { dayOffset = 0; renderDate(); };
+$('btnYesterday').onclick = () => { dayOffset = -1; renderDate(); };
+renderDate();
+
+// --- toast ---
+let toastTimer;
+function toast(msg, isErr) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.toggle('err', !!isErr);
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+// --- settings ---
+$('gear').onclick = () => { $('patInput').value = localStorage.getItem('pat') || ''; $('settings').showModal(); };
+$('patCancel').onclick = () => $('settings').close();
+$('patSave').onclick = () => {
+  const v = $('patInput').value.trim();
+  if (v) localStorage.setItem('pat', v); else localStorage.removeItem('pat');
+  $('settings').close();
+  toast(v ? '鍵を保存した' : '鍵を消した');
+};
+
+// --- base64 (UTF-8) ---
+function b64(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  bytes.forEach(b => bin += String.fromCharCode(b));
+  return btoa(bin);
+}
+
+// --- entry compose / push ---
+function compose(date, kane, hitokoto, memo) {
+  return `# ${date}\n\n金: ${kane || 'なし'}\n一行: ${hitokoto}\nメモ: ${memo}\n`;
+}
+async function push(entry) {
+  const pat = localStorage.getItem('pat');
+  if (!pat) throw { code: 'nopat' };
+  const res = await fetch(
+    `https://api.github.com/repos/${OWNER}/${REPO}/contents/entries/${entry.path}`,
+    {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${pat}`,
+        'Accept': 'application/vnd.github+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ message: `diary: ${entry.date}`, content: b64(entry.body) })
+    }
+  );
+  if (res.status === 401 || res.status === 403) throw { code: 'auth' };
+  if (!res.ok) throw { code: 'http', status: res.status };
+}
+
+// --- offline queue ---
+function getQueue() { return JSON.parse(localStorage.getItem('queue') || '[]'); }
+function setQueue(q) {
+  localStorage.setItem('queue', JSON.stringify(q));
+  const n = $('queueNote');
+  n.hidden = q.length === 0;
+  n.textContent = q.length ? `未送信 ${q.length} 件（次にオンラインで開いた時に送る）` : '';
+}
+async function flushQueue() {
+  const q = getQueue();
+  if (!q.length) return;
+  const rest = [];
+  let stopped = false;
+  for (const e of q) {
+    if (stopped) { rest.push(e); continue; }
+    try { await push(e); }
+    catch (err) { rest.push(e); if (err.code === 'auth' || err.code === 'nopat') stopped = true; }
+  }
+  setQueue(rest);
+  if (rest.length < q.length) toast(`未送信分 ${q.length - rest.length} 件を送った`);
+}
+
+// --- save ---
+$('save').onclick = async () => {
+  const kane = $('kane').value.trim();
+  const hitokoto = $('hitokoto').value.trim();
+  const memo = $('memo').value.trim();
+  if (!hitokoto && !kane && !memo) { toast('なにか一つは書け', true); return; }
+  const date = dateStr(dayOffset);
+  const entry = { date, path: `${date}-${timeStr()}.md`, body: compose(date, kane, hitokoto, memo) };
+  $('save').disabled = true;
+  try {
+    await push(entry);
+    toast('記した ✓');
+    $('kane').value = ''; $('hitokoto').value = ''; $('memo').value = '';
+    dayOffset = 0; renderDate();
+    flushQueue();
+  } catch (err) {
+    if (err.code === 'nopat') { toast('先に設定で鍵を貼れ', true); $('settings').showModal(); }
+    else if (err.code === 'auth') { toast('鍵が無効だ。設定から入れ直せ', true); }
+    else {
+      setQueue(getQueue().concat([entry]));
+      toast('圏外か。手元に置いた——次に開けば送る');
+      $('kane').value = ''; $('hitokoto').value = ''; $('memo').value = '';
+    }
+  } finally {
+    $('save').disabled = false;
+  }
+};
+
+// --- boot ---
+setQueue(getQueue());
+if (navigator.onLine) flushQueue();
+if (!localStorage.getItem('pat')) $('settings').showModal();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+</script>
+</body>
+</html>
