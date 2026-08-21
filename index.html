@@ -49,8 +49,7 @@
     width: 100%; border: 0; background: transparent; color: var(--ink);
     font-size: 17px; font-family: inherit; outline: none; resize: none; line-height: 1.6;
   }
-  textarea#hitokoto { min-height: 3.2em; }
-  textarea#memo { min-height: 2em; font-size: 15px; }
+  textarea#hitokoto { min-height: 5em; }
   ::placeholder { color: #4d5160; }
   #save {
     border: 0; border-radius: 999px; background: var(--gold); color: #14161b;
@@ -102,13 +101,8 @@
   </div>
 
   <div class="field">
-    <label for="hitokoto">一行</label>
+    <label for="hitokoto">一行（長くなってもいい）</label>
     <textarea id="hitokoto" placeholder="今日あったこと・思ったこと"></textarea>
-  </div>
-
-  <div class="field">
-    <label for="memo">メモ（任意）</label>
-    <textarea id="memo" placeholder=""></textarea>
   </div>
 
   <button id="save">記す</button>
@@ -181,8 +175,8 @@ function b64(str) {
 }
 
 // --- entry compose / push ---
-function compose(date, kane, hitokoto, memo) {
-  return `# ${date}\n\n金: ${kane || 'なし'}\n一行: ${hitokoto}\nメモ: ${memo}\n`;
+function compose(date, kane, hitokoto) {
+  return `# ${date}\n\n金: ${kane || 'なし'}\n一行: ${hitokoto}\n`;
 }
 async function push(entry) {
   const pat = localStorage.getItem('pat');
@@ -229,15 +223,14 @@ async function flushQueue() {
 $('save').onclick = async () => {
   const kane = $('kane').value.trim();
   const hitokoto = $('hitokoto').value.trim();
-  const memo = $('memo').value.trim();
-  if (!hitokoto && !kane && !memo) { toast('なにか一つは書け', true); return; }
+  if (!hitokoto && !kane) { toast('なにか一つは書け', true); return; }
   const date = dateStr(dayOffset);
-  const entry = { date, path: `${date}-${timeStr()}.md`, body: compose(date, kane, hitokoto, memo) };
+  const entry = { date, path: `${date}-${timeStr()}.md`, body: compose(date, kane, hitokoto) };
   $('save').disabled = true;
   try {
     await push(entry);
     toast('記した ✓');
-    $('kane').value = ''; $('hitokoto').value = ''; $('memo').value = '';
+    $('kane').value = ''; $('hitokoto').value = '';
     dayOffset = 0; renderDate();
     flushQueue();
   } catch (err) {
@@ -246,7 +239,7 @@ $('save').onclick = async () => {
     else {
       setQueue(getQueue().concat([entry]));
       toast('圏外か。手元に置いた——次に開けば送る');
-      $('kane').value = ''; $('hitokoto').value = ''; $('memo').value = '';
+      $('kane').value = ''; $('hitokoto').value = '';
     }
   } finally {
     $('save').disabled = false;
